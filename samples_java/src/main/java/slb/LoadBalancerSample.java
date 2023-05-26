@@ -1,43 +1,40 @@
-import com.aliyun.cloudcontrol20220606.Client;
-import com.aliyun.cloudcontrol20220606.models.*;
+package slb;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import com.aliyun.cloudcontrol20220830.Client;
+import com.aliyun.cloudcontrol20220830.models.*;
 import com.aliyun.tea.TeaException;
 import com.aliyun.teaopenapi.models.Config;
-import com.google.gson.Gson;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import enums.TaskStatusEnum;
+
 import java.util.Map;
+
 
 /**
  * @author bzran
  * @description 负载均衡实例的创建、更新、查询、列举、删除
  */
-public class SlbSample {
-
-    /**
-     * 云厂商
-     */
-    private final static String provider = "Aliyun";
-
-    /**
-     * 云产品
-     */
-    private final static String productCode = "SLB";
-
-    /**
-     * 资源类型
-     */
-    private final static String resourceTypeCode = "LoadBalancer";
+public class LoadBalancerSample {
 
     /**
      * 地域
      */
-    private final static String regionId = "cn-beijing";
+    private final static String regionId = "cn-zhangjiakou";
+
+    /**
+     * 资源路径，格式为：/api/v1/providers/{provider}/products/{product}/resources/{parentResourcePath}/{resourceTypeCode}。
+     */
+    private final static String resourcePath = "/api/v1/providers/Aliyun/products/SLB/resources/LoadBalancer";
+
+    /**
+     * 超时时间header
+     */
+    private final static String timeoutKey = "x-acs-cloudcontrol-timeout";
 
     /**
      * SDK Client
      */
-    private static com.aliyun.cloudcontrol20220606.Client cloudControlClient;
+    private static com.aliyun.cloudcontrol20220830.Client cloudControlClient;
 
     /**
      * 异步操作轮询间隔(ms)
@@ -49,26 +46,26 @@ public class SlbSample {
         try {
             Config config = new Config()
                     // 您的AccessKey ID
-                    .setAccessKeyId("your_ak")
+                    .setAccessKeyId("ak")
                     // 您的AccessKey Secret
-                    .setAccessKeySecret("your_sk")
+                    .setAccessKeySecret("sk")
                     //设置sdk超时时间
                     .setReadTimeout(20000);
             config.endpoint = "cloudcontrol.aliyuncs.com";
             cloudControlClient = new Client(config);
 
             //创建slb负载均衡实例
-            String instanceId = createLoadBalancer();
+            String resourceId = createLoadBalancer();
             //更新slb负载均衡实例
-            boolean update = updateLoadBalancer(instanceId);
+            boolean update = updateLoadBalancer(resourceId);
             //查询slb负载均衡实例
-            String instance = getLoadBalancer(instanceId);
+            String instance = getLoadBalancer(resourceId);
             System.out.println(instance);
             //列举slb负载均衡实例
             String instances = listLoadBalancers();
             System.out.println(instances);
             //删除slb负载均衡实例
-            boolean delete = deleteLoadBalancer(instanceId);
+            boolean delete = deleteLoadBalancer(resourceId);
         } catch (TeaException e) {
             // 如有需要，请打印 error
             System.out.println("Error code: " + e.getCode());
@@ -85,31 +82,17 @@ public class SlbSample {
      */
     private static String createLoadBalancer() throws Exception {
 
-        //资源属性及其对应值（key，value的map转为String即可）
-        Map<String, Object> resourceAttributeMap = new HashMap<>();
-        //实例名称
-        resourceAttributeMap.put("LoadBalancerName", "cc-test");
-        //实例规格
-        resourceAttributeMap.put("LoadBalancerSpec", "slb.s3.small");
-        //公网类型实例的付费方式
-        resourceAttributeMap.put("InternetChargeType", "PayByBandwidth");
-        //Tag标签
-        List<Map<String, String>> tags = new ArrayList<>();
-        Map<String, String> tag1 = new HashMap<>();
-        tag1.put("TagKey","cckey1");
-        tag1.put("TagValue","ccvalue1");
-        Map<String, String> tag2 = new HashMap<>();
-        tag2.put("TagKey","cckey2");
-        tag2.put("TagValue","ccvalue2");
-        tags.add(tag1);
-        tags.add(tag2);
-        resourceAttributeMap.put("Tags", tags);
+        //资源属性及其对应值(json串,部分属性需改为自己账号对应的值)
+        String resourceAttributes = "{\"LoadBalancerName\":\"cc-test\",\"LoadBalancerSpec\":\"slb.s3.small\",\"InternetChargeType\":\"PayByBandwidth\",\"Tags\":[{\"TagKey\":\"cckey1\",\"TagValue\":\"ccvalue1\"},{\"TagKey\":\"cckey2\",\"TagValue\":\"ccvalue2\"}]}";
+        //资源属性及其对应值
+        Map<String, Object> resourceAttributeMap = JSONObject.parseObject(resourceAttributes,Map.class);
 
-        String resourceAttributes = new Gson().toJson(resourceAttributeMap);
         CreateResourceRequest createResourceRequest = new CreateResourceRequest();
-        createResourceRequest.setBody(resourceAttributes);
+        createResourceRequest.setBody(resourceAttributeMap);
         createResourceRequest.setRegionId(regionId);
-        CreateResourceResponse createResourceResponse = cloudControlClient.createResource(provider, productCode, resourceTypeCode, createResourceRequest);
+        String createResourcesPath = resourcePath;
+        //返回资源的id或对应taskid
+        CreateResourceResponse createResourceResponse = cloudControlClient.createResource(createResourcesPath, createResourceRequest);
         String resourceId = null;
         if (createResourceResponse.statusCode == 201) {
             resourceId = createResourceResponse.getBody().resourceId;
@@ -118,8 +101,10 @@ public class SlbSample {
             long timeStart = System.currentTimeMillis();
             GetTaskResponse getTaskResponse = cloudControlClient.getTask(taskId);
             String taskStatus = getTaskResponse.getBody().getTask().status;
+            //获取异步超时时间
+            int timeout = Integer.parseInt(createResourceResponse.getHeaders().get(timeoutKey));
             // 轮询异步创建任务
-            while (TaskStatusEnum.RUNNING.getValue().equals(taskStatus) && (System.currentTimeMillis() - timeStart) < createResourceResponse.getBody().getTimeout() * 1000) {
+            while (TaskStatusEnum.RUNNING.getValue().equals(taskStatus) && (System.currentTimeMillis() - timeStart) < timeout* 1000) {
                 getTaskResponse = cloudControlClient.getTask(taskId);
                 taskStatus = getTaskResponse.getBody().getTask().status;
                 Thread.sleep(PERIOD);
@@ -155,9 +140,12 @@ public class SlbSample {
 
         String resourceAttributes = "{\"LoadBalancerName\":\"cc-test2\",\"DeleteProtection\":\"off\",\"ModificationProtectionStatus\":\"ConsoleProtection\",\"LoadBalancerSpec\":\"slb.s2.small\",\"Bandwidth\":\"5\",\"InternetChargeType\":\"PayByBandwidth\"}";
         UpdateResourceRequest updateResourceRequest = new UpdateResourceRequest();
-        updateResourceRequest.setBody(resourceAttributes);
+        //资源属性及其对应值
+        Map<String, Object> resourceAttributeMap = JSONObject.parseObject(resourceAttributes,Map.class);
+        updateResourceRequest.setBody(resourceAttributeMap);
         updateResourceRequest.setRegionId(regionId);
-        UpdateResourceResponse updateResourceResponse = cloudControlClient.updateResource(provider, productCode, resourceTypeCode, resourceId, updateResourceRequest);
+        String updateResourcePath = resourcePath + "/" + resourceId;
+        UpdateResourceResponse updateResourceResponse = cloudControlClient.updateResource(updateResourcePath, updateResourceRequest);
         if (updateResourceResponse.statusCode == 200) {
             return true;
         } else if (updateResourceResponse.statusCode == 202) {
@@ -165,8 +153,10 @@ public class SlbSample {
             long timeStart = System.currentTimeMillis();
             GetTaskResponse getTaskResponse = cloudControlClient.getTask(taskId);
             String taskStatus = getTaskResponse.getBody().getTask().status;
+            //获取异步超时时间
+            int timeout = Integer.parseInt(updateResourceResponse.getHeaders().get(timeoutKey));
             // 轮询异步创建任务
-            while (TaskStatusEnum.RUNNING.getValue().equals(taskStatus) && (System.currentTimeMillis() - timeStart) < updateResourceResponse.getBody().getTimeout() * 1000) {
+            while (TaskStatusEnum.RUNNING.getValue().equals(taskStatus) && (System.currentTimeMillis() - timeStart) < timeout * 1000) {
                 getTaskResponse = cloudControlClient.getTask(taskId);
                 taskStatus = getTaskResponse.getBody().getTask().status;
                 Thread.sleep(PERIOD);
@@ -200,11 +190,13 @@ public class SlbSample {
      */
     private static String getLoadBalancer(String resourceId) throws Exception {
 
-        GetResourceRequest getResourceRequest = new GetResourceRequest();
+        GetResourcesRequest getResourceRequest = new GetResourcesRequest();
         //region化的产品必须加此参数，表示获取哪个region的资源
         getResourceRequest.setRegionId(regionId);
-        GetResourceResponse getResourceResponse = cloudControlClient.getResource(provider, productCode, resourceTypeCode, resourceId, getResourceRequest);
-        return getResourceResponse.getBody().getResource().getResourceAttributes();
+        String getResourcePath = resourcePath + "/" + resourceId;
+        //返回指定资源
+        GetResourcesResponse getResourceResponse = cloudControlClient.getResources(getResourcePath, getResourceRequest);
+        return JSON.toJSONString(getResourceResponse.getBody().getResource().getResourceAttributes());
     }
 
     /**
@@ -212,12 +204,12 @@ public class SlbSample {
      */
     private static String listLoadBalancers() throws Exception {
 
-        ListResourcesRequest listResourceRequest = new ListResourcesRequest();
-        List<String> regionIds = new ArrayList<>();
-        regionIds.add(regionId);
-        listResourceRequest.setRegionIds(regionIds);
-        ListResourcesResponse listResourceResponse = cloudControlClient.listResources(provider, productCode, resourceTypeCode, listResourceRequest);
-        return new Gson().toJson(listResourceResponse.getBody().getResources());
+        GetResourcesRequest getResourcesRequest = new GetResourcesRequest();
+        getResourcesRequest.setRegionId(regionId);
+        String listResourcesPath = resourcePath;
+        //返回资源列表
+        GetResourcesResponse getResourcesResponse = cloudControlClient.getResources(listResourcesPath, getResourcesRequest);
+        return JSON.toJSONString(getResourcesResponse.getBody().getResources());
     }
 
     /**
@@ -228,7 +220,8 @@ public class SlbSample {
         DeleteResourceRequest deleteResourceRequest = new DeleteResourceRequest();
         //region化的产品必须加此参数，表示删除哪个region的资源
         deleteResourceRequest.setRegionId(regionId);
-        DeleteResourceResponse deleteResourceResponse = cloudControlClient.deleteResource(provider, productCode, resourceTypeCode, resourceId, deleteResourceRequest);
+        String deleteResourcePath = resourcePath + "/" + resourceId;
+        DeleteResourceResponse deleteResourceResponse = cloudControlClient.deleteResource(deleteResourcePath, deleteResourceRequest);
         if (deleteResourceResponse.statusCode == 200) {
             return true;
         } else if (deleteResourceResponse.statusCode == 202) {
@@ -236,8 +229,10 @@ public class SlbSample {
             long timeStart = System.currentTimeMillis();
             GetTaskResponse getTaskResponse = cloudControlClient.getTask(taskId);
             String taskStatus = getTaskResponse.getBody().getTask().status;
+            //获取异步超时时间
+            int timeout = Integer.parseInt(deleteResourceResponse.getHeaders().get(timeoutKey));
             // 轮询异步创建任务
-            while (TaskStatusEnum.RUNNING.getValue().equals(taskStatus) && (System.currentTimeMillis() - timeStart) < deleteResourceResponse.getBody().getTimeout() * 1000) {
+            while (TaskStatusEnum.RUNNING.getValue().equals(taskStatus) && (System.currentTimeMillis() - timeStart) < timeout * 1000) {
                 getTaskResponse = cloudControlClient.getTask(taskId);
                 taskStatus = getTaskResponse.getBody().getTask().status;
                 Thread.sleep(PERIOD);

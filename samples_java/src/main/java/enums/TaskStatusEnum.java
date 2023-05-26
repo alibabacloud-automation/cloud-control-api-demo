@@ -1,3 +1,4 @@
+package enums;
 
 /**
  * @author bzran
@@ -14,7 +15,7 @@ public enum TaskStatusEnum {
     private final String value;
     private final String description;
 
-    TaskStatusEnum(String value,String description) {
+    TaskStatusEnum(String value, String description) {
         this.value = value;
         this.description = description;
     }

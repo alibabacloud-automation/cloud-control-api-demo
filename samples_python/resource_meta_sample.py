@@ -1,11 +1,11 @@
-from alibabacloud_cloudcontrol20220606.client import Client as CloudControlClient
+from alibabacloud_cloudcontrol20220830.client import Client as CloudControlClient
 from alibabacloud_tea_openapi import models as open_api_models
-from alibabacloud_cloudcontrol20220606 import models as cloud_control_models
+from alibabacloud_cloudcontrol20220830 import models as cloud_control_models
 from alibabacloud_tea_util import models as util_models
 from alibabacloud_tea_util.client import Client as UtilClient
 
 
-class MetaSample:
+class ResourceMetaSample:
 
     def __init__(self):
         pass
@@ -20,9 +20,9 @@ class MetaSample:
         """
         config = open_api_models.Config(
             # 您的AccessKey ID(改为自己的)
-            access_key_id="your_ak",
+            access_key_id="ak",
             # 您的AccessKey Secret(改为自己的)
-            access_key_secret="your_sk",
+            access_key_secret="sk",
             # 公司UserAgent信息(改为自己的)
             user_agent="vendor/AnyCloudCompany-CloudManager@2.1.0",
             # 设置sdk读取超时时间
@@ -66,17 +66,13 @@ class MetaSample:
 
     @staticmethod
     def get_resource_type(
-        product: str,
-        resource_type: str
     ) -> cloud_control_models.GetResourceTypeResponseBodyResourceType:
         """
         查询资源meta详情
         @return: GetResourceTypeResponseBodyResourceType
         @throws Exception
         """
-        get_resource_type_request = cloud_control_models.GetResourceTypeRequest()
-        get_resource_type_response = cloud_control_client.get_resource_type(provider, product, resource_type,
-                                                                            get_resource_type_request)
+        get_resource_type_response = cloud_control_client.get_resource_type(resourceTypePath)
         if get_resource_type_response.status_code == 200:
             return get_resource_type_response.body.resource_type
         else:
@@ -84,19 +80,17 @@ class MetaSample:
 
     @staticmethod
     def get_resource_type_en(
-        product: str,
-        resource_type: str
     ) -> cloud_control_models.GetResourceTypeResponseBodyResourceType:
         """
         查询资源meta详情(国际化英文版)
         @return: str
         @throws Exception
         """
-        get_resource_type_request = cloud_control_models.GetResourceTypeRequest()
+        headers = cloud_control_models.GetResourceTypeHeaders()
+        headers.x_acs_accept_language = "en_US"
         runtime = util_models.RuntimeOptions()
-        headers = {'x-acs-accept-language': 'en_US'}
         get_resource_type_response = cloud_control_client.get_resource_type_with_options(
-            provider, product, resource_type, get_resource_type_request, headers, runtime)
+            resourceTypePath, headers, runtime)
         if get_resource_type_response.status_code == 200:
             return get_resource_type_response.body.resource_type
         else:
@@ -104,8 +98,6 @@ class MetaSample:
 
     @staticmethod
     def list_data_source(
-        product: str,
-        resource_type: str,
         attribute_name: str
     ) -> list:
         """
@@ -114,8 +106,8 @@ class MetaSample:
         @throws Exception
         """
         list_data_source_request = cloud_control_models.ListDataSourcesRequest()
-        list_data_source_response = cloud_control_client.list_data_sources(provider, product, resource_type,
-                                                                           attribute_name, list_data_source_request)
+        list_data_source_request.attribute_name = attribute_name
+        list_data_source_response = cloud_control_client.list_data_sources(dataSourcePath, list_data_source_request)
         if list_data_source_response.status_code == 200:
             return list_data_source_response.body.data_sources
         else:
@@ -129,21 +121,24 @@ if __name__ == '__main__':
     product = "ECS"
     # 资源code
     resourceType = "Instance"
+    # 资源类型路径
+    resourceTypePath = "/api/v1/providers/aliyun/products/ECS/resourceTypes/Instance"
+    # 数据源路径
+    dataSourcePath = "/api/v1/providers/aliyun/products/ECS/dataSources/Instance"
 
     try:
         # 初始化sdk
-        cloud_control_client = MetaSample.create_client()
+        cloud_control_client = ResourceMetaSample.create_client()
         # 列举产品列表
-        products = MetaSample.list_products()
+        products = ResourceMetaSample.list_products()
         # 列举ECS下的资源列表
-        resource_types = MetaSample.list_resource_types(product)
+        resource_types = ResourceMetaSample.list_resource_types(product)
         # 查询ECS的Instance资源meta
-        resource_type = MetaSample.get_resource_type(product, resourceType)
+        resource_type = ResourceMetaSample.get_resource_type()
         # 查询ECS的Instance资源meta(国际化，返回英文描述)
-        resource_type_en = MetaSample.get_resource_type_en(product, resourceType)
+        resource_type_en = ResourceMetaSample.get_resource_type_en()
         # 查询ECS的Instance资源支持的Region
-        data_sources = MetaSample.list_data_source(product, resourceType, 'RegionId')
-        a =0
+        data_sources = ResourceMetaSample.list_data_source('RegionId')
     except Exception as error:
         # 打印 error
         print(UtilClient.assert_as_string(error.message))

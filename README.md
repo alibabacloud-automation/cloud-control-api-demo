@@ -4,8 +4,8 @@ This repo provides samples for cloud control api, it will help you to query reso
 
 ## Prerequisite
 
-* Prepare the AK&SK with cloud control RAM Policy.
-* Install SDK.
+* Prepare the AK&SK with [cloud control RAM Policy](https://help.aliyun.com/document_detail/472535.html).
+* [Install SDK](https://help.aliyun.com/document_detail/471333.html).
 
 ## Cloud Control API Best Practice Multilingual Sample
 Use Java and Python to implement usage examples and best practice examples of the open interfaces of the cloud control API.
